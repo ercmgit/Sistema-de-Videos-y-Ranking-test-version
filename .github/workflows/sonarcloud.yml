@@ -14,9 +14,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-
-        include:
-          # ====== Ajusta keys y nombres a tu organización ======
           - name: Api
             path: Api
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_API
