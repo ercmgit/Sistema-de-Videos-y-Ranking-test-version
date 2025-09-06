@@ -1,0 +1,103 @@
+name: SonarCloud (monorepo Go)
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  sonar:
+    name: Analyze ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+
+        include:
+          # ====== Ajusta keys y nombres a tu organización ======
+          - name: Api
+            path: Api
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_API
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_API
+            env: Api
+          - name: Workers-AudioRemoval
+            path: Workers/AudioRemoval
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_audio_removal
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_audio_removal
+            env: Workers-AudioRemoval
+          - name: Workers-EditVideo
+            path: Workers/EditVideo
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_edit_video
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_edit_video
+            env: Workers-EditVideo
+          - name: Workers-gossipOpenClose
+            path: Workers/gossipOpenClose
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_gossip_open_close
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_gossip_open_close
+            env: Workers-gossipOpenClose
+          - name: Workers-TrimVideo
+            path: Workers/TrimVideo
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_trim_video
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_trim_video
+            env: Workers-TrimVideo
+          - name: Workers-Watermarking
+            path: Workers/Watermarking
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_watermarking
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_watermarking
+            env: Workers-Watermarking
+          # Agrega más (AdminCache, StatesMachine) cuando tengan código Go y tests
+          - name: Workers-AdminCache
+            path: Workers/AdminCache
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_admin_cache
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_admin_cache
+            env: Workers-AdminCache
+          - name: Workers-StatesMachine
+            path: Workers/StatesMachine
+            sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_state_machine
+            sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_state_machine
+            env: Workers-StatesMachine
+    # <- clave: esto hace que cada iteración del matrix use el Environment con su propio SONAR_TOKEN
+    environment: ${{ matrix.env }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.path }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Download deps
+        run: go mod download
+
+      - name: Run tests with coverage
+        run: go test ./... -coverprofile=coverage.out -covermode=atomic
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # <- viene del Environment activo
+        with:
+          projectBaseDir: .
+          args: >
+            -Dsonar.projectKey=${{ matrix.sonar_project_key }}
+            -Dsonar.projectName=${{ matrix.sonar_project_name }}
+            -Dsonar.sources=.
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.exclusions=**/vendor/**,**/static/**,**/assets/**,**/migrations/**,**/*.yaml,**/*.yml
+            -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.sourceEncoding=UTF-8
+
+
+
