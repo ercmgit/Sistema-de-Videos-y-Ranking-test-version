@@ -1,89 +1,132 @@
+# Workflow name
 name: SonarCloud (monorepo Go)
 
+# Trigger events
 on:
   push:
-    branches: [ main, dev ]
+    branches: [main, dev]
   pull_request:
-    branches: [ main, dev ]
+    branches: [main, dev]
 
 jobs:
   sonar:
     name: Analyze ${{ matrix.name }}
     runs-on: ubuntu-latest
+    
+    # Matrix strategy configuration
     strategy:
       fail-fast: false
       matrix:
         include:
+          # API Service
           - name: Api
             path: Api
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_API
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_API
             env: Api
+
+          # Worker Services
           - name: Workers-AudioRemoval
             path: Workers/AudioRemoval
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_audio_removal
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_audio_removal
             env: Workers-AudioRemoval
+
           - name: Workers-EditVideo
             path: Workers/EditVideo
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_edit_video
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_edit_video
             env: Workers-EditVideo
+
           - name: Workers-gossipOpenClose
             path: Workers/gossipOpenClose
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_gossip_open_close
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_gossip_open_close
             env: Workers-gossipOpenClose
+
           - name: Workers-TrimVideo
             path: Workers/TrimVideo
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_trim_video
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_trim_video
             env: Workers-TrimVideo
+
           - name: Workers-Watermarking
             path: Workers/Watermarking
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_watermarking
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_watermarking
             env: Workers-Watermarking
-          # Agrega más (AdminCache, StatesMachine) cuando tengan código Go y tests
+
+          # Infrastructure Services
           - name: Workers-AdminCache
             path: Workers/AdminCache
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_admin_cache
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_admin_cache
             env: Workers-AdminCache
+
           - name: Workers-StatesMachine
             path: Workers/StatesMachine
             sonar_project_key: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_state_machine
             sonar_project_name: ercmgit_Sistema-de-Videos-y-Ranking-test-version_WRKR_state_machine
             env: Workers-StatesMachine
-    # <- clave: esto hace que cada iteración del matrix use el Environment con su propio SONAR_TOKEN
-    environment: ${{ matrix.env }}
 
+    # Environment configuration
+    environment: ${{ matrix.env }}
     defaults:
       run:
         working-directory: ${{ matrix.path }}
 
+    # Job steps
     steps:
+      # Checkout repository
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Setup Go environment
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
+      # Verify go.sum integrity
+      - name: Sanity check go.sum
+        if: hashFiles(format('{0}/go.mod', matrix.path)) != ''
+        working-directory: ${{ matrix.path }}
+        shell: bash
+        run: |
+          if [ -f go.sum ]; then
+            # Quick view of first 10 lines
+            nl -ba go.sum | sed -n '1,10p'
+
+            # Check for merge markers
+            grep -nE '^(<<<<<<<|=======|>>>>>>>)' go.sum && {
+              echo "::error ::go.sum contains merge markers. Please fix and commit.";
+              exit 1;
+            } || true
+
+            # Verify line format
+            awk 'NF!=3 {print "Line", NR, "=>", $0; exit 1}' go.sum || true
+          else
+            echo "No go.sum found; will be generated with go mod tidy/download if needed."
+          fi
+
+      # Download dependencies
       - name: Download deps
+        if: hashFiles(format('{0}/go.mod', matrix.path)) != ''
+        working-directory: ${{ matrix.path }}
         run: go mod download
 
+      # Run tests with coverage
       - name: Run tests with coverage
         run: go test ./... -coverprofile=coverage.out -covermode=atomic
 
+      # SonarCloud analysis
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # <- viene del Environment activo
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: .
           args: >
@@ -96,6 +139,3 @@ jobs:
             -Dsonar.exclusions=**/vendor/**,**/static/**,**/assets/**,**/migrations/**,**/*.yaml,**/*.yml
             -Dsonar.go.coverage.reportPaths=coverage.out
             -Dsonar.sourceEncoding=UTF-8
-
-
-
