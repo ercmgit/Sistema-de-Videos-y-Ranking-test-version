@@ -87,6 +87,7 @@ jobs:
         with:
           projectBaseDir: .
           args: >
+            -Dsonar.organization=ercmgit
             -Dsonar.projectKey=${{ matrix.sonar_project_key }}
             -Dsonar.projectName=${{ matrix.sonar_project_name }}
             -Dsonar.sources=.
